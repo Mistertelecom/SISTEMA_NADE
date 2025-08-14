@@ -8,7 +8,12 @@ import User from '@/models/User'
 import bcrypt from 'bcrypt'
 import logger from '@/lib/logger'
 
-const client = new MongoClient(process.env.MONGODB_URI!)
+const client = new MongoClient(process.env.MONGODB_URI!, {
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4
+})
 const clientPromise = Promise.resolve(client)
 
 export const authOptions: NextAuthOptions = {

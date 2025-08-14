@@ -12,5 +12,9 @@
       "source": "/api/(.*)",
       "destination": "/api/$1"
     }
-  ]
+  ],
+  "env": {
+    "NEXTAUTH_URL": "https://sistema-nade.vercel.app",
+    "NODE_ENV": "production"
+  }
 }
