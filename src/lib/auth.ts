@@ -10,8 +10,10 @@ import logger from '@/lib/logger'
 
 const client = new MongoClient(process.env.MONGODB_URI!, {
   maxPoolSize: 10,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
+  serverSelectionTimeoutMS: 3000,
+  socketTimeoutMS: 20000,
+  connectTimeoutMS: 10000,
+  maxIdleTimeMS: 30000,
   family: 4
 })
 const clientPromise = Promise.resolve(client)
@@ -30,15 +32,28 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        const startTime = Date.now()
         try {
+          logger.info('Starting authentication', { email: credentials.email })
+          
           await dbConnect()
+          logger.info('Database connected', { duration: Date.now() - startTime })
+          
           const user = await User.findOne({ email: credentials.email })
+          logger.info('User query completed', { 
+            found: !!user, 
+            duration: Date.now() - startTime 
+          })
           
           if (!user) {
             return null
           }
 
           const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+          logger.info('Password validation completed', { 
+            valid: isPasswordValid, 
+            duration: Date.now() - startTime 
+          })
           
           if (!isPasswordValid) {
             return null
@@ -53,7 +68,8 @@ export const authOptions: NextAuthOptions = {
         } catch (error) {
           logger.error('Authentication failed', error as Error, {
             email: credentials.email,
-            method: 'credentials_login'
+            method: 'credentials_login',
+            duration: Date.now() - startTime
           })
           return null
         }
