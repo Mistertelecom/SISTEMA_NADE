@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #334155;
+  --color-background: #ffffff;
+  --color-foreground: #1f2937;
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+  --color-border: #e2e8f0;
+  --color-input: #ffffff;
+  --color-ring: #2563eb;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --radius: 0.5rem;
+}
+
+/* Estilos básicos para garantir funcionalidade */
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #1f2937;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+  /* Improve touch targets */
+  input, select, textarea, button {
+    min-height: 44px;
+  }
+  
+  /* Better text readability on small screens */
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  
+  /* Prevent zoom on input focus */
+  input[type="text"],
+  input[type="email"], 
+  input[type="password"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Ensure proper viewport behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Safe area support for mobile devices */
+@supports (padding: env(safe-area-inset-left)) {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
