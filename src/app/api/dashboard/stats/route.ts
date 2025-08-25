@@ -19,46 +19,55 @@ export async function GET() {
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    // Count open occurrences
-    const openOccurrences = await Occurrence.countDocuments({
-      status: { $in: ['open', 'in_progress'] }
-    })
+    // Otimizar consultas executando em paralelo
+    const [openOccurrences, todayOccurrences, recentOccurrences, occurrencesByType] = await Promise.all([
+      // Count open occurrences
+      Occurrence.countDocuments({
+        status: { $in: ['open', 'in_progress'] }
+      }),
 
-    // Count today's occurrences
-    const todayOccurrences = await Occurrence.countDocuments({
-      createdAt: {
-        $gte: today,
-        $lt: tomorrow
-      }
-    })
-
-    // Get recent occurrences
-    const recentOccurrences = await Occurrence.find()
-      .populate('student', 'name class')
-      .sort({ createdAt: -1 })
-      .limit(5)
-
-    // Get occurrences by type
-    const occurrencesByType = await Occurrence.aggregate([
-      {
-        $group: {
-          _id: '$type',
-          count: { $sum: 1 }
+      // Count today's occurrences
+      Occurrence.countDocuments({
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow
         }
-      },
-      {
-        $project: {
-          type: '$_id',
-          count: 1,
-          _id: 0
+      }),
+
+      // Get recent occurrences com projeção específica
+      Occurrence.find({}, {
+        student: 1,
+        type: 1,
+        severity: 1,
+        createdAt: 1
+      })
+        .populate('student', 'name class')
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+
+      // Get occurrences by type com cache
+      Occurrence.aggregate([
+        {
+          $group: {
+            _id: '$type',
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            type: '$_id',
+            count: 1,
+            _id: 0
+          }
+        },
+        {
+          $sort: { count: -1 }
+        },
+        {
+          $limit: 10
         }
-      },
-      {
-        $sort: { count: -1 }
-      },
-      {
-        $limit: 10
-      }
+      ])
     ])
 
     return NextResponse.json({

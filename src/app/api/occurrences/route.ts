@@ -48,14 +48,36 @@ export async function GET(request: NextRequest) {
       query.date = dateQuery
     }
 
-    const occurrences = await Occurrence.find(query)
-      .populate('student', 'name class enrollmentNumber')
-      .populate('reportedBy', 'name')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-
-    const total = await Occurrence.countDocuments(query)
+    // Otimizar consulta com projeção específica
+    const [occurrences, total] = await Promise.all([
+      Occurrence.find(query, {
+        // Projetar apenas campos necessários
+        student: 1,
+        type: 1,
+        description: 1,
+        date: 1,
+        time: 1,
+        location: 1,
+        severity: 1,
+        status: 1,
+        reportedBy: 1,
+        solicitante: 1,
+        envolvidos: 1,
+        motivos: 1,
+        acoes: 1,
+        conclusao: 1,
+        observacoes: 1,
+        createdAt: 1
+      })
+        .populate('student', 'name class enrollmentNumber')
+        .populate('reportedBy', 'name')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(), // Use lean() para melhor performance
+      
+      Occurrence.countDocuments(query)
+    ])
 
     return NextResponse.json({
       occurrences,

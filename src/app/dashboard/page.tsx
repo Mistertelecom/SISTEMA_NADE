@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, memo } from 'react'
 import { AuthWrapper } from '@/components/auth-wrapper'
 import { MobileHeader } from '@/components/mobile-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,9 +38,37 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData()
+  }, [fetchDashboardData])
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const getSeverityColor = useMemo(() => (severity: string) => {
+    switch (severity) {
+      case 'high': return 'text-red-600 bg-red-50'
+      case 'medium': return 'text-yellow-600 bg-yellow-50'
+      case 'low': return 'text-green-600 bg-green-50'
+      default: return 'text-gray-600 bg-gray-50'
+    }
   }, [])
 
-  const fetchDashboardData = async () => {
+  const getSeverityLabel = useMemo(() => (severity: string) => {
+    switch (severity) {
+      case 'high': return 'Alta'
+      case 'medium': return 'Média'
+      case 'low': return 'Baixa'
+      default: return severity
+    }
+  }, [])
+
+  const fetchDashboardData = useMemo(() => async () => {
     try {
       const [studentsRes, occurrencesRes, recentRes] = await Promise.all([
         fetch('/api/students?limit=1'),
@@ -68,35 +96,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'high': return 'text-red-600 bg-red-50'
-      case 'medium': return 'text-yellow-600 bg-yellow-50'
-      case 'low': return 'text-green-600 bg-green-50'
-      default: return 'text-gray-600 bg-gray-50'
-    }
-  }
-
-  const getSeverityLabel = (severity: string) => {
-    switch (severity) {
-      case 'high': return 'Alta'
-      case 'medium': return 'Média'
-      case 'low': return 'Baixa'
-      default: return severity
-    }
-  }
+  }, [])
 
   if (loading) {
     return (

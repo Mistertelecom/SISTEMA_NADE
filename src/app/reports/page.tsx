@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { AuthWrapper } from '@/components/auth-wrapper'
 import { MobileHeader } from '@/components/mobile-header'
 import { Button } from '@/components/ui/button'
@@ -8,8 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { FileText, Download, Calendar, Filter, ChevronDown, Printer } from 'lucide-react'
-import html2canvas from 'html2canvas'
-import jsPDF from 'jspdf'
+import { generateReportsPDF } from '@/utils/pdf-generator'
 import logger from '@/lib/logger'
 
 interface Occurrence {
@@ -48,214 +47,42 @@ export default function ReportsPage() {
     return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   }
 
-  // Função otimizada para converter cores oklch/oklab para RGB
-  const convertModernColorsToRGB = (element: HTMLElement) => {
-    if (typeof window === 'undefined') return
-    
-    try {
-      // Cache para conversões já feitas
-      const colorCache = new Map<string, string>()
-      
-      // Função auxiliar para converter cor
-      const convertColor = (colorValue: string): string => {
-        if (colorCache.has(colorValue)) {
-          return colorCache.get(colorValue)!
-        }
-        
-        try {
-          const canvas = document.createElement('canvas')
-          canvas.width = 1
-          canvas.height = 1
-          const ctx = canvas.getContext('2d', { willReadFrequently: true })
-          if (ctx) {
-            ctx.fillStyle = colorValue
-            const rgbColor = ctx.fillStyle
-            colorCache.set(colorValue, rgbColor)
-            return rgbColor
-          }
-        } catch (e) {
-          colorCache.set(colorValue, '#000000')
-          return '#000000'
-        }
-        
-        colorCache.set(colorValue, colorValue)
-        return colorValue
-      }
-      
-      // Aplicar conversão apenas nos elementos que precisam
-      const computedStyle = window.getComputedStyle(element)
-      const essentialProps = ['color', 'backgroundColor', 'borderColor']
-      
-      essentialProps.forEach(prop => {
-        const value = computedStyle.getPropertyValue(prop)
-        if (value && (value.includes('oklch') || value.includes('oklab'))) {
-          const convertedColor = convertColor(value)
-          element.style.setProperty(prop, convertedColor, 'important')
-        }
-      })
-      
-      // Para elementos filhos
-      const childElements = element.querySelectorAll('*')
-      childElements.forEach((child) => {
-        if (child instanceof HTMLElement) {
-          const childStyle = window.getComputedStyle(child)
-          essentialProps.forEach(prop => {
-            const value = childStyle.getPropertyValue(prop)
-            if (value && (value.includes('oklch') || value.includes('oklab'))) {
-              const convertedColor = convertColor(value)
-              child.style.setProperty(prop, convertedColor, 'important')
-            }
-          })
-        }
-      })
-      
-    } catch (error) {
-      console.warn('Erro ao converter cores:', error)
-    }
-  }
-
-  const generatePDF = async () => {
-    if (!reportRef.current) {
-      alert('Erro: Conteúdo não encontrado para gerar PDF.')
-      return
-    }
-
+  // Nova função PDF otimizada
+  const generatePDF = useCallback(async () => {
     setIsGeneratingPDF(true)
     try {
-      const element = reportRef.current
-      
-      // Aguardar um momento para garantir que o DOM está estável
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      console.log('Preparando cores...')
-      // Converter cores modernas para RGB compatíveis
-      convertModernColorsToRGB(element)
-      
-      // Configurações otimizadas para mobile e compatibilidade com cores
-      const options = {
-        scale: isMobile() ? 1 : 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 15000,
-        removeContainer: true,
-        foreignObjectRendering: false, // Desabilitar para evitar problemas com cores modernas
-        ignoreElements: (element: Element) => {
-          // Ignorar elementos com cores problemáticas
-          try {
-            const style = window.getComputedStyle(element)
-            const bgColor = style.backgroundColor
-            const color = style.color
-            return Boolean((bgColor && (bgColor.includes('oklch') || bgColor.includes('oklab'))) ||
-                   (color && (color.includes('oklch') || color.includes('oklab'))))
-          } catch {
-            return false
-          }
-        },
-        width: element.offsetWidth || element.scrollWidth,
-        height: element.offsetHeight || element.scrollHeight,
-        scrollX: 0,
-        scrollY: 0,
-        x: 0,
-        y: 0
-      }
-
-      console.log('Iniciando captura do relatório...')
-      const canvas = await html2canvas(element, options)
-      console.log('Canvas capturado com sucesso')
-
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        throw new Error('Canvas vazio ou inválido')
-      }
-
-      // Criar PDF
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
-      })
-
-      console.log('Convertendo para imagem...')
-      const imgData = canvas.toDataURL('image/jpeg', 0.8)
-      
-      if (!imgData || imgData.length < 100) {
-        throw new Error('Falha ao converter canvas para imagem')
-      }
-
-      // Calcular dimensões
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pdfWidth - 20
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      
-      let yPosition = 10
-      let remainingHeight = imgHeight
-
-      console.log('Adicionando ao PDF...')
-      
-      // Primeira página
-      pdf.addImage(imgData, 'JPEG', 10, yPosition, imgWidth, imgHeight)
-      remainingHeight -= (pdfHeight - 20)
-
-      // Páginas adicionais
-      while (remainingHeight > 0) {
-        pdf.addPage()
-        yPosition = -(imgHeight - remainingHeight) + 10
-        pdf.addImage(imgData, 'JPEG', 10, yPosition, imgWidth, imgHeight)
-        remainingHeight -= (pdfHeight - 20)
-      }
-
-      const fileName = `Relatorio_Geral_NADE_${new Date().toISOString().split('T')[0]}.pdf`
-
-      // Tentar salvar
-      try {
-        pdf.save(fileName)
-        console.log('Relatório salvo com sucesso')
-      } catch (saveError) {
-        console.error('Erro ao salvar:', saveError)
-        // Fallback
-        const pdfBlob = pdf.output('blob')
-        const url = URL.createObjectURL(pdfBlob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = fileName
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      }
-
+      await generateReportsPDF(filteredOccurrences)
     } catch (error) {
-      console.error('Erro detalhado:', error)
-      
-      let errorMessage = 'Erro ao gerar PDF do relatório. '
-      if (error instanceof Error) {
-        if (error.message.includes('Canvas')) {
-          errorMessage += 'Problema ao capturar o conteúdo. Tente rolar para o topo da página.'
-        } else if (error.message.includes('memory')) {
-          errorMessage += 'Conteúdo muito grande. Tente filtrar menos dados.'
-        } else {
-          errorMessage += `Detalhes: ${error.message}`
-        }
-      } else {
-        errorMessage += 'Erro desconhecido. Tente novamente.'
-      }
-      
-      alert(errorMessage)
+      console.error('Erro ao gerar PDF:', error)
+      alert('Erro ao gerar PDF do relatório. Tente novamente.')
     } finally {
       setIsGeneratingPDF(false)
     }
-  }
+  }, [filteredOccurrences])
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     if (isMobile()) {
       await generatePDF()
     } else {
       window.print()
     }
-  }
+  }, [generatePDF])
+
+  // Memoizar occurrences filtradas para melhor performance
+  const filteredOccurrences = useMemo(() => {
+    return occurrences.filter(occurrence => {
+      const occurrenceDate = new Date(occurrence.date)
+      const fromDate = filters.dateFrom ? new Date(filters.dateFrom) : null
+      const toDate = filters.dateTo ? new Date(filters.dateTo) : null
+
+      const dateMatch = (!fromDate || occurrenceDate >= fromDate) && 
+                       (!toDate || occurrenceDate <= toDate)
+      const typeMatch = !filters.type || occurrence.type.toLowerCase().includes(filters.type.toLowerCase())
+      const statusMatch = !filters.status || occurrence.status === filters.status
+
+      return dateMatch && typeMatch && statusMatch
+    })
+  }, [occurrences, filters])
 
   useEffect(() => {
     fetchOccurrences()
