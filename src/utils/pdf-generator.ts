@@ -31,46 +31,12 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     format: 'a4'
   })
 
-  // Configurações
+  // Configurações otimizadas para uma página
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 15
-  const lineHeight = 6
+  const margin = 10
+  const lineHeight = 4
   let yPosition = margin
-
-  // Função para adicionar texto com quebra automática
-  const addText = (text: string, x: number, fontSize: number = 10, maxWidth?: number) => {
-    pdf.setFontSize(fontSize)
-    if (maxWidth) {
-      const lines = pdf.splitTextToSize(text, maxWidth)
-      pdf.text(lines, x, yPosition)
-      yPosition += lines.length * lineHeight
-    } else {
-      pdf.text(text, x, yPosition)
-      yPosition += lineHeight
-    }
-  }
-
-  // Função para adicionar nova página se necessário
-  const checkNewPage = (additionalHeight: number = lineHeight) => {
-    if (yPosition + additionalHeight > pageHeight - margin) {
-      pdf.addPage()
-      yPosition = margin
-    }
-  }
-
-  // Cabeçalho
-  pdf.setFont('helvetica', 'bold')
-  addText('SECRETARIA DE EDUCAÇÃO E CULTURA', pageWidth/2 - 60, 14)
-  addText('Núcleo de Apoio Disciplinar Escolar - NADE', pageWidth/2 - 70, 12)
-  addText('Relatório de atendimento', pageWidth/2 - 35, 11)
-  
-  yPosition += 10
-
-  // Linha horizontal
-  pdf.setLineWidth(0.5)
-  pdf.line(margin, yPosition, pageWidth - margin, yPosition)
-  yPosition += 10
 
   // Formatação de data
   const formatDate = (dateString: string) => {
@@ -81,46 +47,79 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     }
   }
 
-  // Informações básicas
+  // Cabeçalho compacto
   pdf.setFont('helvetica', 'bold')
-  addText('LOCAL:', margin, 10)
-  pdf.setFont('helvetica', 'normal')
-  pdf.text(occurrence.location || '', margin + 15, yPosition - lineHeight)
+  pdf.setFontSize(12)
+  pdf.text('SECRETARIA DE EDUCAÇÃO E CULTURA', pageWidth/2, yPosition, { align: 'center' })
+  yPosition += 5
   
-  pdf.setFont('helvetica', 'bold')
-  pdf.text('DATA:', pageWidth/2, yPosition - lineHeight)
-  pdf.setFont('helvetica', 'normal')
-  pdf.text(formatDate(occurrence.date), pageWidth/2 + 15, yPosition - lineHeight)
+  pdf.setFontSize(10)
+  pdf.text('Núcleo de Apoio Disciplinar Escolar - NADE', pageWidth/2, yPosition, { align: 'center' })
+  yPosition += 4
+  
+  pdf.setFontSize(9)
+  pdf.text('Relatório de atendimento', pageWidth/2, yPosition, { align: 'center' })
+  yPosition += 8
 
-  pdf.setFont('helvetica', 'bold')
-  pdf.text('HORA:', pageWidth - 60, yPosition - lineHeight)
-  pdf.setFont('helvetica', 'normal')
-  pdf.text(occurrence.time || '', pageWidth - 40, yPosition - lineHeight)
-  
+  // Linha horizontal
+  pdf.setLineWidth(0.3)
+  pdf.line(margin, yPosition, pageWidth - margin, yPosition)
   yPosition += 5
 
-  // Solicitante
-  checkNewPage(20)
+  // Informações básicas em linha
   pdf.setFont('helvetica', 'bold')
-  addText('SOLICITANTE(S):', margin, 10)
+  pdf.setFontSize(8)
+  pdf.text('LOCAL:', margin, yPosition)
   pdf.setFont('helvetica', 'normal')
-  addText(occurrence.solicitante || '', margin, 9, pageWidth - 2*margin)
-  yPosition += 5
-
-  // Envolvidos
-  checkNewPage(20)
+  pdf.text(occurrence.location || '', margin + 15, yPosition)
+  
   pdf.setFont('helvetica', 'bold')
-  addText('ENVOLVIDO(S):', margin, 10)
+  pdf.text('DATA:', pageWidth/3, yPosition)
+  pdf.setFont('helvetica', 'normal')
+  pdf.text(formatDate(occurrence.date), pageWidth/3 + 15, yPosition)
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.text('HORA:', 2*pageWidth/3, yPosition)
+  pdf.setFont('helvetica', 'normal')
+  pdf.text(occurrence.time || '', 2*pageWidth/3 + 15, yPosition)
+  
+  yPosition += 8
+
+  // Solicitante compacto
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(8)
+  pdf.text('SOLICITANTE(S):', margin, yPosition)
+  pdf.setFont('helvetica', 'normal')
+  const solicitanteText = occurrence.solicitante || ''
+  if (solicitanteText.length > 0) {
+    const lines = pdf.splitTextToSize(solicitanteText, pageWidth - 2*margin - 35)
+    pdf.text(lines, margin + 35, yPosition)
+    yPosition += Math.min(lines.length * 4, 8) // Limitar altura
+  } else {
+    yPosition += 4
+  }
+  yPosition += 3
+
+  // Envolvidos compacto
+  pdf.setFont('helvetica', 'bold')
+  pdf.text('ENVOLVIDO(S):', margin, yPosition)
   pdf.setFont('helvetica', 'normal')
   const envolvidos = occurrence.envolvidos?.filter(e => e.trim()).join(', ') || ''
-  addText(envolvidos, margin, 9, pageWidth - 2*margin)
+  if (envolvidos.length > 0) {
+    const lines = pdf.splitTextToSize(envolvidos, pageWidth - 2*margin - 35)
+    pdf.text(lines, margin + 35, yPosition)
+    yPosition += Math.min(lines.length * 4, 8) // Limitar altura
+  } else {
+    yPosition += 4
+  }
   yPosition += 5
 
-  // Motivos
-  checkNewPage(40)
+  // Motivos otimizados em grid compacto
   pdf.setFont('helvetica', 'bold')
-  addText('MOTIVO(S):', margin, 10)
-  
+  pdf.setFontSize(8)
+  pdf.text('MOTIVO(S):', margin, yPosition)
+  yPosition += 5
+
   const motivos = [
     'Indisciplina', 'Bullying', 'Palestra', 'Uso de fato', 'Porte de drogas',
     'Porte de objeto que causa perigo', 'Dano', 'Transporte escolar',
@@ -130,96 +129,110 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
   ]
 
   pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(8)
+  pdf.setFontSize(6.5)
   
-  let xPos = margin
+  // Grid 3x6 otimizado
+  const colWidth = (pageWidth - 2*margin) / 3
   const itemsPerRow = 3
+  const rowsPerSection = 6
   
   motivos.forEach((motivo, index) => {
-    checkNewPage()
-    const isChecked = occurrence.motivos?.includes(motivo) ? '[X]' : '[ ]'
-    pdf.text(`${isChecked} ${motivo}`, xPos, yPosition)
+    const row = Math.floor(index / itemsPerRow)
+    const col = index % itemsPerRow
+    const xPos = margin + (col * colWidth)
+    const yPos = yPosition + (row * 3.5)
     
-    xPos += 60
-    if ((index + 1) % itemsPerRow === 0) {
-      yPosition += lineHeight
-      xPos = margin
+    const isChecked = occurrence.motivos?.includes(motivo) ? '[X]' : '[ ]'
+    
+    // Truncar texto longo se necessário
+    let displayText = motivo
+    if (motivo.length > 35) {
+      displayText = motivo.substring(0, 32) + '...'
     }
+    
+    pdf.text(`${isChecked} ${displayText}`, xPos, yPos)
   })
   
-  if (motivos.length % itemsPerRow !== 0) {
-    yPosition += lineHeight
-  }
-  yPosition += 5
+  yPosition += rowsPerSection * 3.5 + 5
 
-  // Ações
-  checkNewPage(30)
+  // Ações compactas
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  addText('AÇÃO ADOTADA:', margin, 10)
+  pdf.setFontSize(8)
+  pdf.text('AÇÃO ADOTADA:', margin, yPosition)
+  yPosition += 4
   
   const acoes = ['Aconselhamento', 'Advertência', 'Suspensão', 'Transferência', 'Outro']
   pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(8)
+  pdf.setFontSize(7)
   
-  xPos = margin
+  // 2 colunas para ações
   acoes.forEach((acao, index) => {
-    const isChecked = occurrence.acoes?.includes(acao) ? '[X]' : '[ ]'
-    pdf.text(`${isChecked} ${acao}`, xPos, yPosition)
-    xPos += 70
-    if ((index + 1) % 2 === 0) {
-      yPosition += lineHeight
-      xPos = margin
-    }
-  })
-  
-  if (acoes.length % 2 !== 0) {
-    yPosition += lineHeight
-  }
-  yPosition += 10
-
-  // Conclusão
-  checkNewPage(30)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  addText('CONCLUSÃO:', margin, 10)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(9)
-  addText(occurrence.conclusao || '', margin, 9, pageWidth - 2*margin)
-  yPosition += 10
-
-  // Observações
-  checkNewPage(30)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  addText('OBSERVAÇÕES:', margin, 10)
-  pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(9)
-  addText(occurrence.observacoes || '', margin, 9, pageWidth - 2*margin)
-  yPosition += 15
-
-  // Assinaturas
-  checkNewPage(60)
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(10)
-  addText('ASSINATURAS:', margin, 10)
-  yPosition += 10
-
-  // Linhas de assinatura
-  const signatures = ['Solicitante(s)', 'Envolvido(s)', 'Representante(s) NADE']
-  
-  signatures.forEach(signature => {
-    checkNewPage(20)
-    pdf.setFont('helvetica', 'normal')
-    pdf.setFontSize(9)
-    addText(`${signature}:`, margin, 9)
-    yPosition += 5
+    const row = Math.floor(index / 2)
+    const col = index % 2
+    const xPos = margin + (col * (pageWidth - 2*margin) / 2)
+    const yPos = yPosition + (row * 3.5)
     
-    // Linha para assinatura
-    pdf.setLineWidth(0.3)
-    pdf.line(margin, yPosition, pageWidth - margin, yPosition)
-    yPosition += 15
+    const isChecked = occurrence.acoes?.includes(acao) ? '[X]' : '[ ]'
+    pdf.text(`${isChecked} ${acao}`, xPos, yPos)
   })
+  
+  yPosition += Math.ceil(acoes.length / 2) * 3.5 + 5
+
+  // Conclusão compacta
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(8)
+  pdf.text('CONCLUSÃO:', margin, yPosition)
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(7)
+  const conclusaoText = occurrence.conclusao || ''
+  if (conclusaoText.length > 0) {
+    const lines = pdf.splitTextToSize(conclusaoText, pageWidth - 2*margin)
+    pdf.text(lines, margin, yPosition + 4)
+    yPosition += Math.min(lines.length * 3.5, 14) + 4 // Limitar altura
+  } else {
+    yPosition += 4
+  }
+  yPosition += 5
+
+  // Observações compactas
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(8)
+  pdf.text('OBSERVAÇÕES:', margin, yPosition)
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(7)
+  const observacoesText = occurrence.observacoes || ''
+  if (observacoesText.length > 0) {
+    const lines = pdf.splitTextToSize(observacoesText, pageWidth - 2*margin)
+    pdf.text(lines, margin, yPosition + 4)
+    yPosition += Math.min(lines.length * 3.5, 14) + 4 // Limitar altura
+  } else {
+    yPosition += 4
+  }
+  yPosition += 8
+
+  // Assinaturas compactas em linha
+  const remainingSpace = pageHeight - margin - yPosition
+  if (remainingSpace > 25) {
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.text('ASSINATURAS:', margin, yPosition)
+    yPosition += 6
+
+    const signatures = ['Solicitante(s)', 'Envolvido(s)', 'Representante(s) NADE']
+    const signatureWidth = (pageWidth - 2*margin) / 3
+    
+    signatures.forEach((signature, index) => {
+      const xPos = margin + (index * signatureWidth)
+      
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(7)
+      pdf.text(`${signature}:`, xPos, yPosition)
+      
+      // Linha para assinatura
+      pdf.setLineWidth(0.2)
+      pdf.line(xPos, yPosition + 8, xPos + signatureWidth - 5, yPosition + 8)
+    })
+  }
 
   // Gerar nome do arquivo
   const studentName = occurrence.student?.name?.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_') || 'Ocorrencia'
