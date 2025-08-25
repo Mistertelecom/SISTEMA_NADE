@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { AuthWrapper } from '@/components/auth-wrapper'
 import { MobileHeader } from '@/components/mobile-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
-import { FileText, Download, Calendar, Filter, ChevronDown } from 'lucide-react'
+import { FileText, Download, Calendar, Filter, ChevronDown, Printer } from 'lucide-react'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 import logger from '@/lib/logger'
 
 interface Occurrence {
@@ -31,12 +33,74 @@ interface Occurrence {
 export default function ReportsPage() {
   const [occurrences, setOccurrences] = useState<Occurrence[]>([])
   const [loading, setLoading] = useState(true)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const reportRef = useRef<HTMLDivElement>(null)
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: '',
     type: '',
     status: ''
   })
+
+  // Detectar se é mobile
+  const isMobile = () => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  }
+
+  const generatePDF = async () => {
+    if (!reportRef.current) return
+
+    setIsGeneratingPDF(true)
+    try {
+      const element = reportRef.current
+      
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: element.scrollWidth,
+        height: element.scrollHeight
+      })
+
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgData = canvas.toDataURL('image/png')
+      
+      const imgWidth = 210
+      const pageHeight = 295
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight
+
+      let position = 0
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      const fileName = `Relatorio_Geral_NADE_${new Date().toISOString().split('T')[0]}.pdf`
+      pdf.save(fileName)
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (isMobile()) {
+      await generatePDF()
+    } else {
+      window.print()
+    }
+  }
 
   useEffect(() => {
     fetchOccurrences()
@@ -125,10 +189,17 @@ export default function ReportsPage() {
             <Button
               size="sm"
               className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              onClick={() => window.print()}
+              onClick={handleExport}
+              disabled={isGeneratingPDF}
             >
-              <Download className="h-4 w-4 mr-1" />
-              PDF
+              {isGeneratingPDF ? (
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+              ) : isMobile() ? (
+                <Download className="h-4 w-4 mr-1" />
+              ) : (
+                <Printer className="h-4 w-4 mr-1" />
+              )}
+              {isGeneratingPDF ? 'Gerando...' : 'PDF'}
             </Button>
           }
         />
@@ -140,11 +211,22 @@ export default function ReportsPage() {
               <h1 className="text-3xl font-bold text-gray-900">Relatórios</h1>
               <p className="mt-2 text-gray-600">Visualize e exporte relatórios de ocorrências</p>
             </div>
-            <Button onClick={() => window.print()}>
-              <Download className="h-4 w-4 mr-2" />
-              Exportar PDF
+            <Button onClick={handleExport} disabled={isGeneratingPDF}>
+              {isGeneratingPDF ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Gerando PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar PDF
+                </>
+              )}
             </Button>
           </div>
+
+          <div ref={reportRef} className="report-content">{/* Conteúdo para PDF */}
 
           {/* Filters Section */}
           <div className="bg-white rounded-xl shadow-sm border-0 p-4 sm:p-6">
@@ -316,6 +398,7 @@ export default function ReportsPage() {
               )}
             </div>
           )}
+          </div>{/* Fim do conteúdo para PDF */}
         </div>
       </div>
     </AuthWrapper>

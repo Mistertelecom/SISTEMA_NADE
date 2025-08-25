@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Printer } from 'lucide-react'
+import { Printer, Download, FileText } from 'lucide-react'
+import html2canvas from 'html2canvas'
+import jsPDF from 'jspdf'
 
 interface IOccurrence {
   _id: string
@@ -34,11 +36,81 @@ interface OccurrencePrintProps {
 
 export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
   const printRef = useRef<HTMLDivElement>(null)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
 
-  const handlePrint = async () => {
+  // Detectar se é mobile
+  const isMobile = () => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  }
+
+  const generatePDF = async () => {
     if (!printRef.current) return
 
-    // Criar nova janela para impressão
+    setIsGeneratingPDF(true)
+    try {
+      // Configurar o elemento para captura
+      const element = printRef.current
+      
+      // Configurações para melhor qualidade
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+        scrollX: 0,
+        scrollY: 0
+      })
+
+      // Criar PDF
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const imgData = canvas.toDataURL('image/png')
+      
+      // Calcular dimensões para A4
+      const imgWidth = 210 // A4 width in mm
+      const pageHeight = 295 // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      let heightLeft = imgHeight
+
+      let position = 0
+
+      // Adicionar primeira página
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= pageHeight
+
+      // Adicionar páginas extras se necessário
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+        heightLeft -= pageHeight
+      }
+
+      // Gerar nome do arquivo
+      const fileName = `Relatorio_NADE_${occurrence.student?.name?.replace(/\s+/g, '_') || 'Ocorrencia'}_${new Date().toISOString().split('T')[0]}.pdf`
+
+      // Salvar PDF
+      pdf.save(fileName)
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  const handlePrint = async () => {
+    // Se for mobile, usar geração de PDF
+    if (isMobile()) {
+      await generatePDF()
+      return
+    }
+
+    // Desktop: usar impressão tradicional
+    if (!printRef.current) return
+
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
 
@@ -240,11 +312,52 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
-          <Printer className="h-4 w-4 mr-2" />
-          Imprimir
+      <div className="flex justify-end gap-2 flex-wrap">
+        {/* Botão de Impressão (Desktop) ou PDF (Mobile) */}
+        <Button 
+          onClick={handlePrint} 
+          className="bg-blue-600 hover:bg-blue-700"
+          disabled={isGeneratingPDF}
+        >
+          {isGeneratingPDF ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Gerando...
+            </>
+          ) : isMobile() ? (
+            <>
+              <Download className="h-4 w-4 mr-2" />
+              Salvar PDF
+            </>
+          ) : (
+            <>
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
+            </>
+          )}
         </Button>
+
+        {/* Botão adicional para PDF no desktop */}
+        {!isMobile() && (
+          <Button 
+            onClick={generatePDF} 
+            variant="outline"
+            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+            disabled={isGeneratingPDF}
+          >
+            {isGeneratingPDF ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Gerando...
+              </>
+            ) : (
+              <>
+                <FileText className="h-4 w-4 mr-2" />
+                Salvar PDF
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       <div ref={printRef} className="print-container bg-white border border-gray-300 p-6">
