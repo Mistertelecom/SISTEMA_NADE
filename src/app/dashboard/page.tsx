@@ -169,10 +169,10 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1">
                       <div className="text-sm font-medium text-slate-800">
-                        {occurrence.student.name}
+                        {occurrence.student?.name || 'Nome não informado'}
                       </div>
                       <div className="text-xs text-slate-500">
-                        {occurrence.student.class}
+                        {occurrence.student?.class || 'Turma não informada'}
                       </div>
                     </div>
                     <div className="text-right">
@@ -251,8 +251,8 @@ export default function DashboardPage() {
                     stats.recentOccurrences.map((occurrence) => (
                       <div key={occurrence._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex-1">
-                          <p className="font-medium">{occurrence.student.name}</p>
-                          <p className="text-sm text-gray-500">{occurrence.student.class}</p>
+                          <p className="font-medium">{occurrence.student?.name || 'Nome não informado'}</p>
+                          <p className="text-sm text-gray-500">{occurrence.student?.class || 'Turma não informada'}</p>
                           <p className="text-sm font-medium">{occurrence.type}</p>
                         </div>
                         <div className="text-right">

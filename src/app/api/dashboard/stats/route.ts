@@ -41,7 +41,12 @@ export async function GET() {
         severity: 1,
         createdAt: 1
       })
-        .populate('student', 'name class')
+        .populate({
+          path: 'student',
+          select: 'name class',
+          // Adicionar verificação para estudantes que não existem mais
+          options: { lean: true }
+        })
         .sort({ createdAt: -1 })
         .limit(5)
         .lean(),
