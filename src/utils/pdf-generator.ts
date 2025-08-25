@@ -47,19 +47,26 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     }
   }
 
-  // Adicionar logo no canto superior esquerdo (comentado temporariamente para evitar erros)
-  // A logo será adicionada futuramente quando implementarmos carregamento seguro de imagens
-  // try {
-  //   const logoUrl = '/PREFEITURA.png'
-  //   pdf.addImage(logoUrl, 'PNG', margin, yPosition, 18, 18)
-  // } catch (error) {
-  //   console.log('Logo não encontrada, continuando sem ela')
-  // }
-  
-  // Placeholder visual para logo
-  pdf.setDrawColor(200)
-  pdf.setLineWidth(0.5)
-  pdf.rect(margin, yPosition, 18, 18)
+  // Logo da Prefeitura (versão simplificada em base64 para evitar erros de carregamento)
+  try {
+    // Logo simplificada em ASCII art para representar a Prefeitura
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.setDrawColor(0)
+    pdf.setLineWidth(0.5)
+    
+    // Círculo representando o brasão
+    pdf.circle(margin + 9, yPosition + 9, 8)
+    
+    // Texto "PREFEITURA" dentro do círculo
+    pdf.setFontSize(4)
+    pdf.text('PREFEITURA', margin + 3, yPosition + 7)
+    pdf.text('FREITAS', margin + 5, yPosition + 11)
+    
+    pdf.setDrawColor(0)
+  } catch (error) {
+    console.log('Erro ao desenhar logo, continuando sem ela')
+  }
 
   // Cabeçalho ajustado com logo
   pdf.setFont('helvetica', 'bold')
@@ -185,7 +192,7 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     const xPos = margin + 3 + (col * colWidth)
     const yPos = yPosition + 9 + (row * 6.5)
     
-    const isChecked = occurrence.motivos?.includes(motivo) ? '☑' : '☐'
+    const isChecked = occurrence.motivos?.includes(motivo) ? '[X]' : '[ ]'
     
     // Truncar texto longo se necessário
     let displayText = motivo
@@ -216,7 +223,7 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     const xPos = margin + 3 + (col * ((pageWidth - 2*margin - 6) / 3))
     const yPos = yPosition + 10 + (row * 7)
     
-    const isChecked = occurrence.acoes?.includes(acao) ? '☑' : '☐'
+    const isChecked = occurrence.acoes?.includes(acao) ? '[X]' : '[ ]'
     pdf.text(`${isChecked} ${acao}`, xPos, yPos)
   })
   
