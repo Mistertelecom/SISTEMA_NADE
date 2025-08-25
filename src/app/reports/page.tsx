@@ -143,11 +143,15 @@ export default function ReportsPage() {
         foreignObjectRendering: false, // Desabilitar para evitar problemas com cores modernas
         ignoreElements: (element: Element) => {
           // Ignorar elementos com cores problemáticas
-          const style = window.getComputedStyle(element)
-          const bgColor = style.backgroundColor
-          const color = style.color
-          return (bgColor && (bgColor.includes('oklch') || bgColor.includes('oklab'))) ||
-                 (color && (color.includes('oklch') || color.includes('oklab')))
+          try {
+            const style = window.getComputedStyle(element)
+            const bgColor = style.backgroundColor
+            const color = style.color
+            return Boolean((bgColor && (bgColor.includes('oklch') || bgColor.includes('oklab'))) ||
+                   (color && (color.includes('oklch') || color.includes('oklab'))))
+          } catch {
+            return false
+          }
         },
         width: element.offsetWidth || element.scrollWidth,
         height: element.offsetHeight || element.scrollHeight,
