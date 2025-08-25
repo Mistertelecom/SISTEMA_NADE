@@ -48,6 +48,56 @@ export default function ReportsPage() {
     return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   }
 
+  // Função para converter cores oklch/oklab para RGB
+  const convertModernColorsToRGB = (element: HTMLElement) => {
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_ELEMENT,
+      null
+    )
+    
+    const elementsToProcess: HTMLElement[] = []
+    let node: Node | null = walker.nextNode()
+    
+    while (node) {
+      elementsToProcess.push(node as HTMLElement)
+      node = walker.nextNode()
+    }
+    
+    elementsToProcess.forEach((el) => {
+      const computedStyle = window.getComputedStyle(el)
+      const element = el as HTMLElement
+      
+      // Lista de propriedades CSS que podem conter cores
+      const colorProperties = [
+        'color', 'backgroundColor', 'borderColor', 'borderTopColor', 
+        'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+        'outlineColor', 'textDecorationColor', 'caretColor'
+      ]
+      
+      colorProperties.forEach(prop => {
+        const value = computedStyle.getPropertyValue(prop)
+        if (value && (value.includes('oklch') || value.includes('oklab'))) {
+          // Converter para RGB usando canvas
+          try {
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.fillStyle = value
+              const rgbColor = ctx.fillStyle
+              element.style.setProperty(prop, rgbColor, 'important')
+            }
+          } catch (e) {
+            // Fallback para cores seguras
+            if (prop === 'backgroundColor') element.style.setProperty(prop, '#ffffff', 'important')
+            if (prop === 'color') element.style.setProperty(prop, '#000000', 'important')
+            if (prop.includes('border')) element.style.setProperty(prop, '#000000', 'important')
+          }
+        }
+      })
+    })
+  }
+
   const generatePDF = async () => {
     if (!reportRef.current) {
       alert('Erro: Conteúdo não encontrado para gerar PDF.')
@@ -61,7 +111,11 @@ export default function ReportsPage() {
       // Aguardar um momento para garantir que o DOM está estável
       await new Promise(resolve => setTimeout(resolve, 100))
       
-      // Configurações otimizadas para mobile
+      console.log('Preparando cores...')
+      // Converter cores modernas para RGB compatíveis
+      convertModernColorsToRGB(element)
+      
+      // Configurações otimizadas para mobile e compatibilidade com cores
       const options = {
         scale: isMobile() ? 1 : 2,
         useCORS: true,
@@ -70,7 +124,15 @@ export default function ReportsPage() {
         logging: false,
         imageTimeout: 15000,
         removeContainer: true,
-        foreignObjectRendering: false,
+        foreignObjectRendering: false, // Desabilitar para evitar problemas com cores modernas
+        ignoreElements: (element: Element) => {
+          // Ignorar elementos com cores problemáticas
+          const style = window.getComputedStyle(element)
+          const bgColor = style.backgroundColor
+          const color = style.color
+          return (bgColor && (bgColor.includes('oklch') || bgColor.includes('oklab'))) ||
+                 (color && (color.includes('oklch') || color.includes('oklab')))
+        },
         width: element.offsetWidth || element.scrollWidth,
         height: element.offsetHeight || element.scrollHeight,
         scrollX: 0,
