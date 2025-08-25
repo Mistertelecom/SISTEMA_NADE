@@ -243,7 +243,8 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
   }
 }
 
-export async function generateReportsPDF(occurrences: IOccurrence[]): Promise<void> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function generateReportsPDF(occurrences: any[]): Promise<void> {
   const pdf = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',

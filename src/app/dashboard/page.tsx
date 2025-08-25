@@ -36,10 +36,6 @@ export default function DashboardPage() {
   })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchDashboardData()
-  }, [fetchDashboardData])
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -97,6 +93,10 @@ export default function DashboardPage() {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [fetchDashboardData])
 
   if (loading) {
     return (
