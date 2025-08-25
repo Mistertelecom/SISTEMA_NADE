@@ -47,14 +47,19 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     }
   }
 
-  // Adicionar logo no canto superior esquerdo
-  try {
-    // Converter logo para base64 para funcionar no frontend
-    const logoUrl = '/PREFEITURA.png'
-    pdf.addImage(logoUrl, 'PNG', margin, yPosition, 18, 18)
-  } catch (error) {
-    console.log('Logo não encontrada, continuando sem ela')
-  }
+  // Adicionar logo no canto superior esquerdo (comentado temporariamente para evitar erros)
+  // A logo será adicionada futuramente quando implementarmos carregamento seguro de imagens
+  // try {
+  //   const logoUrl = '/PREFEITURA.png'
+  //   pdf.addImage(logoUrl, 'PNG', margin, yPosition, 18, 18)
+  // } catch (error) {
+  //   console.log('Logo não encontrada, continuando sem ela')
+  // }
+  
+  // Placeholder visual para logo
+  pdf.setDrawColor(200)
+  pdf.setLineWidth(0.5)
+  pdf.rect(margin, yPosition, 18, 18)
 
   // Cabeçalho ajustado com logo
   pdf.setFont('helvetica', 'bold')
