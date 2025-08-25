@@ -206,6 +206,11 @@ export default function LoginPage() {
           <div>Sistema de Ocorrências Escolares</div>
           <div>Núcleo de Apoio ao Desenvolvimento Educacional</div>
         </div>
+        
+        {/* Developer Credit */}
+        <div className="text-center mt-4 text-xs text-slate-400">
+          Desenvolvido por João Pedro Ysoftwares
+        </div>
       </div>
     </div>
   )
