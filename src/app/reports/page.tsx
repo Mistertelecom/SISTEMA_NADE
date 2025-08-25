@@ -47,6 +47,22 @@ export default function ReportsPage() {
     return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   }
 
+  // Memoizar occurrences filtradas para melhor performance
+  const filteredOccurrences = useMemo(() => {
+    return occurrences.filter(occurrence => {
+      const occurrenceDate = new Date(occurrence.date)
+      const fromDate = filters.dateFrom ? new Date(filters.dateFrom) : null
+      const toDate = filters.dateTo ? new Date(filters.dateTo) : null
+
+      const dateMatch = (!fromDate || occurrenceDate >= fromDate) && 
+                       (!toDate || occurrenceDate <= toDate)
+      const typeMatch = !filters.type || occurrence.type.toLowerCase().includes(filters.type.toLowerCase())
+      const statusMatch = !filters.status || occurrence.status === filters.status
+
+      return dateMatch && typeMatch && statusMatch
+    })
+  }, [occurrences, filters])
+
   // Nova função PDF otimizada
   const generatePDF = useCallback(async () => {
     setIsGeneratingPDF(true)
@@ -67,22 +83,6 @@ export default function ReportsPage() {
       window.print()
     }
   }, [generatePDF])
-
-  // Memoizar occurrences filtradas para melhor performance
-  const filteredOccurrences = useMemo(() => {
-    return occurrences.filter(occurrence => {
-      const occurrenceDate = new Date(occurrence.date)
-      const fromDate = filters.dateFrom ? new Date(filters.dateFrom) : null
-      const toDate = filters.dateTo ? new Date(filters.dateTo) : null
-
-      const dateMatch = (!fromDate || occurrenceDate >= fromDate) && 
-                       (!toDate || occurrenceDate <= toDate)
-      const typeMatch = !filters.type || occurrence.type.toLowerCase().includes(filters.type.toLowerCase())
-      const statusMatch = !filters.status || occurrence.status === filters.status
-
-      return dateMatch && typeMatch && statusMatch
-    })
-  }, [occurrences, filters])
 
   useEffect(() => {
     fetchOccurrences()
