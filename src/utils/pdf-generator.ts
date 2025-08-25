@@ -31,11 +31,11 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     format: 'a4'
   })
 
-  // Configurações otimizadas para uma página
+  // Configurações para ocupar página toda
   const pageWidth = pdf.internal.pageSize.getWidth()
   const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 10
-  const lineHeight = 4
+  const margin = 8
+  const lineHeight = 3.8
   let yPosition = margin
 
   // Formatação de data
@@ -47,79 +47,118 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
     }
   }
 
-  // Cabeçalho compacto
+  // Adicionar logo no canto superior esquerdo
+  try {
+    // Converter logo para base64 para funcionar no frontend
+    const logoUrl = '/PREFEITURA.png'
+    pdf.addImage(logoUrl, 'PNG', margin, yPosition, 18, 18)
+  } catch (error) {
+    console.log('Logo não encontrada, continuando sem ela')
+  }
+
+  // Cabeçalho ajustado com logo
   pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(14)
+  pdf.text('PREFEITURA MUNICIPAL DE FREITAS', pageWidth/2, yPosition + 4, { align: 'center' })
+  
   pdf.setFontSize(12)
-  pdf.text('SECRETARIA DE EDUCAÇÃO E CULTURA', pageWidth/2, yPosition, { align: 'center' })
-  yPosition += 5
+  pdf.text('SECRETARIA DE EDUCAÇÃO E CULTURA', pageWidth/2, yPosition + 9, { align: 'center' })
+  
+  pdf.setFontSize(11)
+  pdf.text('Núcleo de Apoio Disciplinar Escolar - NADE', pageWidth/2, yPosition + 14, { align: 'center' })
   
   pdf.setFontSize(10)
-  pdf.text('Núcleo de Apoio Disciplinar Escolar - NADE', pageWidth/2, yPosition, { align: 'center' })
-  yPosition += 4
+  pdf.setFont('helvetica', 'normal')
+  pdf.text('RELATÓRIO DE ATENDIMENTO', pageWidth/2, yPosition + 19, { align: 'center' })
   
-  pdf.setFontSize(9)
-  pdf.text('Relatório de atendimento', pageWidth/2, yPosition, { align: 'center' })
-  yPosition += 8
+  yPosition += 25
 
-  // Linha horizontal
-  pdf.setLineWidth(0.3)
+  // Linha horizontal mais espessa
+  pdf.setLineWidth(0.5)
   pdf.line(margin, yPosition, pageWidth - margin, yPosition)
-  yPosition += 5
+  yPosition += 6
 
-  // Informações básicas em linha
+  // Caixa de informações básicas
+  pdf.setDrawColor(0)
+  pdf.setLineWidth(0.3)
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, 18)
+  
+  // Informações básicas em linha dentro da caixa
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('LOCAL:', margin, yPosition)
+  pdf.setFontSize(9)
+  pdf.text('LOCAL:', margin + 2, yPosition + 4)
   pdf.setFont('helvetica', 'normal')
-  pdf.text(occurrence.location || '', margin + 15, yPosition)
+  pdf.text(occurrence.location || '', margin + 18, yPosition + 4)
   
   pdf.setFont('helvetica', 'bold')
-  pdf.text('DATA:', pageWidth/3, yPosition)
+  pdf.text('DATA:', margin + 2, yPosition + 9)
   pdf.setFont('helvetica', 'normal')
-  pdf.text(formatDate(occurrence.date), pageWidth/3 + 15, yPosition)
+  pdf.text(formatDate(occurrence.date), margin + 18, yPosition + 9)
 
   pdf.setFont('helvetica', 'bold')
-  pdf.text('HORA:', 2*pageWidth/3, yPosition)
+  pdf.text('HORA:', margin + 2, yPosition + 14)
   pdf.setFont('helvetica', 'normal')
-  pdf.text(occurrence.time || '', 2*pageWidth/3 + 15, yPosition)
+  pdf.text(occurrence.time || '', margin + 18, yPosition + 14)
+
+  // Estudante info no lado direito da caixa
+  if (occurrence.student?.name) {
+    pdf.setFont('helvetica', 'bold')
+    pdf.text('ESTUDANTE:', pageWidth/2 + 5, yPosition + 4)
+    pdf.setFont('helvetica', 'normal')
+    pdf.text(occurrence.student.name, pageWidth/2 + 25, yPosition + 4)
+    
+    if (occurrence.student.class) {
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('TURMA:', pageWidth/2 + 5, yPosition + 9)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(occurrence.student.class, pageWidth/2 + 25, yPosition + 9)
+    }
+    
+    if (occurrence.student.enrollmentNumber) {
+      pdf.setFont('helvetica', 'bold')
+      pdf.text('MATRÍCULA:', pageWidth/2 + 5, yPosition + 14)
+      pdf.setFont('helvetica', 'normal')
+      pdf.text(occurrence.student.enrollmentNumber, pageWidth/2 + 25, yPosition + 14)
+    }
+  }
   
-  yPosition += 8
+  yPosition += 22
 
-  // Solicitante compacto
+  // Solicitante com caixa
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, 12)
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('SOLICITANTE(S):', margin, yPosition)
+  pdf.setFontSize(9)
+  pdf.text('SOLICITANTE(S):', margin + 2, yPosition + 4)
   pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8)
   const solicitanteText = occurrence.solicitante || ''
   if (solicitanteText.length > 0) {
-    const lines = pdf.splitTextToSize(solicitanteText, pageWidth - 2*margin - 35)
-    pdf.text(lines, margin + 35, yPosition)
-    yPosition += Math.min(lines.length * 4, 8) // Limitar altura
-  } else {
-    yPosition += 4
+    const lines = pdf.splitTextToSize(solicitanteText, pageWidth - 2*margin - 40)
+    pdf.text(lines, margin + 35, yPosition + 4)
   }
-  yPosition += 3
+  yPosition += 15
 
-  // Envolvidos compacto
+  // Envolvidos com caixa
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, 12)
   pdf.setFont('helvetica', 'bold')
-  pdf.text('ENVOLVIDO(S):', margin, yPosition)
+  pdf.setFontSize(9)
+  pdf.text('ENVOLVIDO(S):', margin + 2, yPosition + 4)
   pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8)
   const envolvidos = occurrence.envolvidos?.filter(e => e.trim()).join(', ') || ''
   if (envolvidos.length > 0) {
     const lines = pdf.splitTextToSize(envolvidos, pageWidth - 2*margin - 35)
-    pdf.text(lines, margin + 35, yPosition)
-    yPosition += Math.min(lines.length * 4, 8) // Limitar altura
-  } else {
-    yPosition += 4
+    pdf.text(lines, margin + 30, yPosition + 4)
   }
-  yPosition += 5
+  yPosition += 15
 
-  // Motivos otimizados em grid compacto
+  // Motivos com caixa grande
+  const motivosHeight = 45
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, motivosHeight)
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('MOTIVO(S):', margin, yPosition)
-  yPosition += 5
-
+  pdf.setFontSize(9)
+  pdf.text('MOTIVO(S):', margin + 2, yPosition + 5)
+  
   const motivos = [
     'Indisciplina', 'Bullying', 'Palestra', 'Uso de fato', 'Porte de drogas',
     'Porte de objeto que causa perigo', 'Dano', 'Transporte escolar',
@@ -129,108 +168,110 @@ export async function generateOccurrencePDF(occurrence: IOccurrence): Promise<vo
   ]
 
   pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(6.5)
+  pdf.setFontSize(7)
   
-  // Grid 3x6 otimizado
-  const colWidth = (pageWidth - 2*margin) / 3
+  // Grid 3x6 dentro da caixa
+  const colWidth = (pageWidth - 2*margin - 4) / 3
   const itemsPerRow = 3
-  const rowsPerSection = 6
   
   motivos.forEach((motivo, index) => {
     const row = Math.floor(index / itemsPerRow)
     const col = index % itemsPerRow
-    const xPos = margin + (col * colWidth)
-    const yPos = yPosition + (row * 3.5)
+    const xPos = margin + 3 + (col * colWidth)
+    const yPos = yPosition + 9 + (row * 6.5)
     
-    const isChecked = occurrence.motivos?.includes(motivo) ? '[X]' : '[ ]'
+    const isChecked = occurrence.motivos?.includes(motivo) ? '☑' : '☐'
     
     // Truncar texto longo se necessário
     let displayText = motivo
-    if (motivo.length > 35) {
-      displayText = motivo.substring(0, 32) + '...'
+    if (motivo.length > 32) {
+      displayText = motivo.substring(0, 29) + '...'
     }
     
     pdf.text(`${isChecked} ${displayText}`, xPos, yPos)
   })
   
-  yPosition += rowsPerSection * 3.5 + 5
+  yPosition += motivosHeight + 3
 
-  // Ações compactas
+  // Ações com caixa
+  const acoesHeight = 20
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, acoesHeight)
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('AÇÃO ADOTADA:', margin, yPosition)
-  yPosition += 4
+  pdf.setFontSize(9)
+  pdf.text('AÇÃO ADOTADA:', margin + 2, yPosition + 5)
   
   const acoes = ['Aconselhamento', 'Advertência', 'Suspensão', 'Transferência', 'Outro']
   pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(7)
+  pdf.setFontSize(8)
   
-  // 2 colunas para ações
+  // 3 colunas para ações
   acoes.forEach((acao, index) => {
-    const row = Math.floor(index / 2)
-    const col = index % 2
-    const xPos = margin + (col * (pageWidth - 2*margin) / 2)
-    const yPos = yPosition + (row * 3.5)
+    const col = index % 3
+    const row = Math.floor(index / 3)
+    const xPos = margin + 3 + (col * ((pageWidth - 2*margin - 6) / 3))
+    const yPos = yPosition + 10 + (row * 7)
     
-    const isChecked = occurrence.acoes?.includes(acao) ? '[X]' : '[ ]'
+    const isChecked = occurrence.acoes?.includes(acao) ? '☑' : '☐'
     pdf.text(`${isChecked} ${acao}`, xPos, yPos)
   })
   
-  yPosition += Math.ceil(acoes.length / 2) * 3.5 + 5
+  yPosition += acoesHeight + 3
 
-  // Conclusão compacta
+  // Conclusão com caixa expandida
+  const conclusaoHeight = 25
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, conclusaoHeight)
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('CONCLUSÃO:', margin, yPosition)
+  pdf.setFontSize(9)
+  pdf.text('CONCLUSÃO:', margin + 2, yPosition + 5)
   pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(7)
+  pdf.setFontSize(8)
   const conclusaoText = occurrence.conclusao || ''
   if (conclusaoText.length > 0) {
-    const lines = pdf.splitTextToSize(conclusaoText, pageWidth - 2*margin)
-    pdf.text(lines, margin, yPosition + 4)
-    yPosition += Math.min(lines.length * 3.5, 14) + 4 // Limitar altura
-  } else {
-    yPosition += 4
+    const lines = pdf.splitTextToSize(conclusaoText, pageWidth - 2*margin - 6)
+    pdf.text(lines, margin + 3, yPosition + 10)
   }
-  yPosition += 5
+  yPosition += conclusaoHeight + 3
 
-  // Observações compactas
+  // Observações com caixa expandida
+  const observacoesHeight = 25
+  pdf.rect(margin, yPosition, pageWidth - 2*margin, observacoesHeight)
   pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(8)
-  pdf.text('OBSERVAÇÕES:', margin, yPosition)
+  pdf.setFontSize(9)
+  pdf.text('OBSERVAÇÕES:', margin + 2, yPosition + 5)
   pdf.setFont('helvetica', 'normal')
-  pdf.setFontSize(7)
+  pdf.setFontSize(8)
   const observacoesText = occurrence.observacoes || ''
   if (observacoesText.length > 0) {
-    const lines = pdf.splitTextToSize(observacoesText, pageWidth - 2*margin)
-    pdf.text(lines, margin, yPosition + 4)
-    yPosition += Math.min(lines.length * 3.5, 14) + 4 // Limitar altura
-  } else {
-    yPosition += 4
+    const lines = pdf.splitTextToSize(observacoesText, pageWidth - 2*margin - 6)
+    pdf.text(lines, margin + 3, yPosition + 10)
   }
-  yPosition += 8
+  yPosition += observacoesHeight + 3
 
-  // Assinaturas compactas em linha
+  // Assinaturas na parte inferior com caixas
   const remainingSpace = pageHeight - margin - yPosition
-  if (remainingSpace > 25) {
+  if (remainingSpace > 20) {
     pdf.setFont('helvetica', 'bold')
-    pdf.setFontSize(8)
+    pdf.setFontSize(9)
     pdf.text('ASSINATURAS:', margin, yPosition)
-    yPosition += 6
+    yPosition += 5
 
     const signatures = ['Solicitante(s)', 'Envolvido(s)', 'Representante(s) NADE']
-    const signatureWidth = (pageWidth - 2*margin) / 3
+    const signatureWidth = (pageWidth - 2*margin - 4) / 3
+    const signatureHeight = Math.min(remainingSpace - 5, 18)
     
     signatures.forEach((signature, index) => {
-      const xPos = margin + (index * signatureWidth)
+      const xPos = margin + (index * (signatureWidth + 2))
+      
+      // Caixa para assinatura
+      pdf.rect(xPos, yPosition, signatureWidth, signatureHeight)
       
       pdf.setFont('helvetica', 'normal')
-      pdf.setFontSize(7)
-      pdf.text(`${signature}:`, xPos, yPosition)
+      pdf.setFontSize(8)
+      pdf.text(`${signature}:`, xPos + 2, yPosition + 5)
       
-      // Linha para assinatura
-      pdf.setLineWidth(0.2)
-      pdf.line(xPos, yPosition + 8, xPos + signatureWidth - 5, yPosition + 8)
+      // Data no final de cada caixa
+      pdf.setFontSize(7)
+      pdf.text('Data: ___/___/______', xPos + 2, yPosition + signatureHeight - 3)
     })
   }
 
