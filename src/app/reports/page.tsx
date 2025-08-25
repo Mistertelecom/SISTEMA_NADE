@@ -49,46 +49,119 @@ export default function ReportsPage() {
   }
 
   const generatePDF = async () => {
-    if (!reportRef.current) return
+    if (!reportRef.current) {
+      alert('Erro: Conteúdo não encontrado para gerar PDF.')
+      return
+    }
 
     setIsGeneratingPDF(true)
     try {
       const element = reportRef.current
       
-      const canvas = await html2canvas(element, {
-        scale: 2,
+      // Aguardar um momento para garantir que o DOM está estável
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Configurações otimizadas para mobile
+      const options = {
+        scale: isMobile() ? 1 : 2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
-        width: element.scrollWidth,
-        height: element.scrollHeight
+        logging: false,
+        imageTimeout: 15000,
+        removeContainer: true,
+        foreignObjectRendering: false,
+        width: element.offsetWidth || element.scrollWidth,
+        height: element.offsetHeight || element.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0
+      }
+
+      console.log('Iniciando captura do relatório...')
+      const canvas = await html2canvas(element, options)
+      console.log('Canvas capturado com sucesso')
+
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Canvas vazio ou inválido')
+      }
+
+      // Criar PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
       })
 
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const imgData = canvas.toDataURL('image/png')
+      console.log('Convertendo para imagem...')
+      const imgData = canvas.toDataURL('image/jpeg', 0.8)
       
-      const imgWidth = 210
-      const pageHeight = 295
+      if (!imgData || imgData.length < 100) {
+        throw new Error('Falha ao converter canvas para imagem')
+      }
+
+      // Calcular dimensões
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth - 20
       const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let heightLeft = imgHeight
+      
+      let yPosition = 10
+      let remainingHeight = imgHeight
 
-      let position = 0
+      console.log('Adicionando ao PDF...')
+      
+      // Primeira página
+      pdf.addImage(imgData, 'JPEG', 10, yPosition, imgWidth, imgHeight)
+      remainingHeight -= (pdfHeight - 20)
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight
+      // Páginas adicionais
+      while (remainingHeight > 0) {
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageHeight
+        yPosition = -(imgHeight - remainingHeight) + 10
+        pdf.addImage(imgData, 'JPEG', 10, yPosition, imgWidth, imgHeight)
+        remainingHeight -= (pdfHeight - 20)
       }
 
       const fileName = `Relatorio_Geral_NADE_${new Date().toISOString().split('T')[0]}.pdf`
-      pdf.save(fileName)
+
+      // Tentar salvar
+      try {
+        pdf.save(fileName)
+        console.log('Relatório salvo com sucesso')
+      } catch (saveError) {
+        console.error('Erro ao salvar:', saveError)
+        // Fallback
+        const pdfBlob = pdf.output('blob')
+        const url = URL.createObjectURL(pdfBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = fileName
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }
+
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error)
-      alert('Erro ao gerar PDF. Tente novamente.')
+      console.error('Erro detalhado:', error)
+      
+      let errorMessage = 'Erro ao gerar PDF do relatório. '
+      if (error instanceof Error) {
+        if (error.message.includes('Canvas')) {
+          errorMessage += 'Problema ao capturar o conteúdo. Tente rolar para o topo da página.'
+        } else if (error.message.includes('memory')) {
+          errorMessage += 'Conteúdo muito grande. Tente filtrar menos dados.'
+        } else {
+          errorMessage += `Detalhes: ${error.message}`
+        }
+      } else {
+        errorMessage += 'Erro desconhecido. Tente novamente.'
+      }
+      
+      alert(errorMessage)
     } finally {
       setIsGeneratingPDF(false)
     }

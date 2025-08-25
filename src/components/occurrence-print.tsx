@@ -37,6 +37,7 @@ interface OccurrencePrintProps {
 export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
   const printRef = useRef<HTMLDivElement>(null)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')
 
   // Detectar se é mobile
   const isMobile = () => {
@@ -45,59 +46,131 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
   }
 
   const generatePDF = async () => {
-    if (!printRef.current) return
+    if (!printRef.current) {
+      alert('Erro: Conteúdo não encontrado para gerar PDF.')
+      return
+    }
 
     setIsGeneratingPDF(true)
     try {
-      // Configurar o elemento para captura
       const element = printRef.current
       
-      // Configurações para melhor qualidade
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: element.scrollWidth,
-        height: element.scrollHeight,
-        scrollX: 0,
-        scrollY: 0
-      })
-
-      // Criar PDF
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const imgData = canvas.toDataURL('image/png')
+      // Aguardar um momento para garantir que o DOM está estável
+      await new Promise(resolve => setTimeout(resolve, 100))
       
-      // Calcular dimensões para A4
-      const imgWidth = 210 // A4 width in mm
-      const pageHeight = 295 // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-      let heightLeft = imgHeight
-
-      let position = 0
-
-      // Adicionar primeira página
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
-
-      // Adicionar páginas extras se necessário
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageHeight
+      // Configurações otimizadas para mobile
+      const options = {
+        scale: isMobile() ? 1 : 2, // Menor escala para mobile para evitar problemas de memória
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 15000,
+        removeContainer: true,
+        foreignObjectRendering: false,
+        width: element.offsetWidth || element.scrollWidth,
+        height: element.offsetHeight || element.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0
       }
 
-      // Gerar nome do arquivo
-      const fileName = `Relatorio_NADE_${occurrence.student?.name?.replace(/\s+/g, '_') || 'Ocorrencia'}_${new Date().toISOString().split('T')[0]}.pdf`
+      setLoadingStep('Preparando conteúdo...')
+      console.log('Iniciando captura do canvas...')
+      const canvas = await html2canvas(element, options)
+      console.log('Canvas capturado com sucesso')
+      setLoadingStep('Processando imagem...')
 
-      // Salvar PDF
-      pdf.save(fileName)
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        throw new Error('Canvas vazio ou inválido')
+      }
+
+      // Criar PDF com configurações específicas
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      })
+
+      console.log('Convertendo canvas para imagem...')
+      const imgData = canvas.toDataURL('image/jpeg', 0.8) // JPEG com qualidade 80% para reduzir tamanho
+      
+      if (!imgData || imgData.length < 100) {
+        throw new Error('Falha ao converter canvas para imagem')
+      }
+
+      // Calcular dimensões para A4
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = pdfWidth - 20 // Margem de 10mm de cada lado
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      
+      let yPosition = 10 // Margem superior
+      let remainingHeight = imgHeight
+
+      setLoadingStep('Criando PDF...')
+      console.log('Adicionando imagem ao PDF...')
+      
+      // Primeira página
+      pdf.addImage(imgData, 'JPEG', 10, yPosition, imgWidth, imgHeight)
+      remainingHeight -= (pdfHeight - 20) // Descontar margens
+
+      // Páginas adicionais se necessário
+      while (remainingHeight > 0) {
+        pdf.addPage()
+        yPosition = -(imgHeight - remainingHeight) + 10
+        pdf.addImage(imgData, 'JPEG', 10, yPosition, imgWidth, imgHeight)
+        remainingHeight -= (pdfHeight - 20)
+      }
+
+      // Gerar nome do arquivo seguro
+      const studentName = occurrence.student?.name?.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_') || 'Ocorrencia'
+      const date = new Date().toISOString().split('T')[0]
+      const fileName = `Relatorio_NADE_${studentName}_${date}.pdf`
+
+      setLoadingStep('Salvando arquivo...')
+      console.log('Salvando PDF:', fileName)
+      
+      // Tentar salvar o PDF
+      try {
+        pdf.save(fileName)
+        console.log('PDF salvo com sucesso')
+      } catch (saveError) {
+        console.error('Erro ao salvar PDF:', saveError)
+        // Fallback: tentar download como blob
+        const pdfBlob = pdf.output('blob')
+        const url = URL.createObjectURL(pdfBlob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = fileName
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }
+
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error)
-      alert('Erro ao gerar PDF. Tente novamente.')
+      console.error('Erro detalhado ao gerar PDF:', error)
+      
+      let errorMessage = 'Erro ao gerar PDF. '
+      if (error instanceof Error) {
+        if (error.message.includes('Canvas')) {
+          errorMessage += 'Problema ao capturar o conteúdo. Tente rolar a página para cima e tente novamente.'
+        } else if (error.message.includes('memory') || error.message.includes('Maximum call stack')) {
+          errorMessage += 'Conteúdo muito grande. Tente reduzir o zoom da página.'
+        } else {
+          errorMessage += `Detalhes: ${error.message}`
+        }
+      } else {
+        errorMessage += 'Erro desconhecido. Verifique sua conexão e tente novamente.'
+      }
+      
+      alert(errorMessage)
     } finally {
       setIsGeneratingPDF(false)
+      setLoadingStep('')
     }
   }
 
@@ -322,7 +395,7 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
           {isGeneratingPDF ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Gerando...
+              {loadingStep || 'Processando...'}
             </>
           ) : isMobile() ? (
             <>
@@ -348,7 +421,7 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
             {isGeneratingPDF ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                Gerando...
+                {loadingStep || 'Processando...'}
               </>
             ) : (
               <>
@@ -360,7 +433,19 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
         )}
       </div>
 
-      <div ref={printRef} className="print-container bg-white border border-gray-300 p-6">
+      <div 
+        ref={printRef} 
+        className="print-container bg-white border border-gray-300 p-6"
+        style={{
+          fontFamily: '"Times New Roman", serif',
+          fontSize: '12px',
+          lineHeight: '1.4',
+          color: '#000',
+          width: '100%',
+          maxWidth: '21cm',
+          margin: '0 auto'
+        }}
+      >
         {/* Cabeçalho */}
         <div className="header">
           <h1>SECRETARIA DE EDUCAÇÃO E CULTURA</h1>
