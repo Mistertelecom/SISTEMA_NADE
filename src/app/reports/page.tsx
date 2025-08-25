@@ -48,54 +48,70 @@ export default function ReportsPage() {
     return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
   }
 
-  // Função para converter cores oklch/oklab para RGB
+  // Função otimizada para converter cores oklch/oklab para RGB
   const convertModernColorsToRGB = (element: HTMLElement) => {
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_ELEMENT,
-      null
-    )
+    if (typeof window === 'undefined') return
     
-    const elementsToProcess: HTMLElement[] = []
-    let node: Node | null = walker.nextNode()
-    
-    while (node) {
-      elementsToProcess.push(node as HTMLElement)
-      node = walker.nextNode()
-    }
-    
-    elementsToProcess.forEach((el) => {
-      const computedStyle = window.getComputedStyle(el)
-      const element = el as HTMLElement
+    try {
+      // Cache para conversões já feitas
+      const colorCache = new Map<string, string>()
       
-      // Lista de propriedades CSS que podem conter cores
-      const colorProperties = [
-        'color', 'backgroundColor', 'borderColor', 'borderTopColor', 
-        'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-        'outlineColor', 'textDecorationColor', 'caretColor'
-      ]
+      // Função auxiliar para converter cor
+      const convertColor = (colorValue: string): string => {
+        if (colorCache.has(colorValue)) {
+          return colorCache.get(colorValue)!
+        }
+        
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1
+          canvas.height = 1
+          const ctx = canvas.getContext('2d', { willReadFrequently: true })
+          if (ctx) {
+            ctx.fillStyle = colorValue
+            const rgbColor = ctx.fillStyle
+            colorCache.set(colorValue, rgbColor)
+            return rgbColor
+          }
+        } catch (e) {
+          colorCache.set(colorValue, '#000000')
+          return '#000000'
+        }
+        
+        colorCache.set(colorValue, colorValue)
+        return colorValue
+      }
       
-      colorProperties.forEach(prop => {
+      // Aplicar conversão apenas nos elementos que precisam
+      const computedStyle = window.getComputedStyle(element)
+      const essentialProps = ['color', 'backgroundColor', 'borderColor']
+      
+      essentialProps.forEach(prop => {
         const value = computedStyle.getPropertyValue(prop)
         if (value && (value.includes('oklch') || value.includes('oklab'))) {
-          // Converter para RGB usando canvas
-          try {
-            const canvas = document.createElement('canvas')
-            const ctx = canvas.getContext('2d')
-            if (ctx) {
-              ctx.fillStyle = value
-              const rgbColor = ctx.fillStyle
-              element.style.setProperty(prop, rgbColor, 'important')
-            }
-          } catch (e) {
-            // Fallback para cores seguras
-            if (prop === 'backgroundColor') element.style.setProperty(prop, '#ffffff', 'important')
-            if (prop === 'color') element.style.setProperty(prop, '#000000', 'important')
-            if (prop.includes('border')) element.style.setProperty(prop, '#000000', 'important')
-          }
+          const convertedColor = convertColor(value)
+          element.style.setProperty(prop, convertedColor, 'important')
         }
       })
-    })
+      
+      // Para elementos filhos
+      const childElements = element.querySelectorAll('*')
+      childElements.forEach((child) => {
+        if (child instanceof HTMLElement) {
+          const childStyle = window.getComputedStyle(child)
+          essentialProps.forEach(prop => {
+            const value = childStyle.getPropertyValue(prop)
+            if (value && (value.includes('oklch') || value.includes('oklab'))) {
+              const convertedColor = convertColor(value)
+              child.style.setProperty(prop, convertedColor, 'important')
+            }
+          })
+        }
+      })
+      
+    } catch (error) {
+      console.warn('Erro ao converter cores:', error)
+    }
   }
 
   const generatePDF = async () => {

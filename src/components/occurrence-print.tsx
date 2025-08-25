@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Printer, Download, FileText } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import { ErrorBoundary } from '@/components/error-boundary'
 
 interface IOccurrence {
   _id: string
@@ -39,60 +40,100 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [loadingStep, setLoadingStep] = useState('')
 
-  // Detectar se é mobile
-  const isMobile = () => {
-    if (typeof window === 'undefined') return false
-    return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  }
-
-  // Função para converter cores oklch/oklab para RGB
-  const convertModernColorsToRGB = (element: HTMLElement) => {
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_ELEMENT,
-      null
-    )
-    
-    const elementsToProcess: HTMLElement[] = []
-    let node: Node | null = walker.nextNode()
-    
-    while (node) {
-      elementsToProcess.push(node as HTMLElement)
-      node = walker.nextNode()
+  // Detectar se é mobile com cache
+  const [isMobileDevice, setIsMobileDevice] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      if (typeof window === 'undefined') return false
+      return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     }
     
-    elementsToProcess.forEach((el) => {
-      const computedStyle = window.getComputedStyle(el)
-      const element = el as HTMLElement
+    setIsMobileDevice(checkMobile())
+    
+    const handleResize = () => {
+      setIsMobileDevice(checkMobile())
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+  
+  const isMobile = () => isMobileDevice
+
+  // Função otimizada para converter cores oklch/oklab para RGB
+  const convertModernColorsToRGB = (element: HTMLElement) => {
+    if (typeof window === 'undefined') return
+    
+    try {
+      // Cache para conversões já feitas
+      const colorCache = new Map<string, string>()
       
-      // Lista de propriedades CSS que podem conter cores
-      const colorProperties = [
-        'color', 'backgroundColor', 'borderColor', 'borderTopColor', 
-        'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-        'outlineColor', 'textDecorationColor', 'caretColor'
-      ]
-      
-      colorProperties.forEach(prop => {
-        const value = computedStyle.getPropertyValue(prop)
-        if (value && (value.includes('oklch') || value.includes('oklab'))) {
-          // Converter para RGB usando canvas
-          try {
-            const canvas = document.createElement('canvas')
-            const ctx = canvas.getContext('2d')
-            if (ctx) {
-              ctx.fillStyle = value
-              const rgbColor = ctx.fillStyle
-              element.style.setProperty(prop, rgbColor, 'important')
-            }
-          } catch (e) {
-            // Fallback para cores seguras
-            if (prop === 'backgroundColor') element.style.setProperty(prop, '#ffffff', 'important')
-            if (prop === 'color') element.style.setProperty(prop, '#000000', 'important')
-            if (prop.includes('border')) element.style.setProperty(prop, '#000000', 'important')
+      // Função auxiliar para converter cor
+      const convertColor = (colorValue: string): string => {
+        if (colorCache.has(colorValue)) {
+          return colorCache.get(colorValue)!
+        }
+        
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1
+          canvas.height = 1
+          const ctx = canvas.getContext('2d', { willReadFrequently: true })
+          if (ctx) {
+            ctx.fillStyle = colorValue
+            const rgbColor = ctx.fillStyle
+            colorCache.set(colorValue, rgbColor)
+            return rgbColor
+          }
+        } catch (e) {
+          // Fallback para cores conhecidas
+          if (colorValue.includes('oklch')) {
+            colorCache.set(colorValue, '#000000')
+            return '#000000'
           }
         }
+        
+        colorCache.set(colorValue, colorValue)
+        return colorValue
+      }
+      
+      // Aplicar conversão apenas nos elementos que precisam
+      const style = element.style
+      const computedStyle = window.getComputedStyle(element)
+      
+      // Verificar apenas propriedades essenciais
+      const essentialProps = ['color', 'backgroundColor', 'borderColor']
+      
+      essentialProps.forEach(prop => {
+        const value = computedStyle.getPropertyValue(prop)
+        if (value && (value.includes('oklch') || value.includes('oklab'))) {
+          const convertedColor = convertColor(value)
+          style.setProperty(prop, convertedColor, 'important')
+        }
       })
-    })
+      
+      // Para elementos filhos, usar uma abordagem mais eficiente
+      const childElements = element.querySelectorAll('*')
+      childElements.forEach((child) => {
+        if (child instanceof HTMLElement) {
+          const childStyle = window.getComputedStyle(child)
+          essentialProps.forEach(prop => {
+            const value = childStyle.getPropertyValue(prop)
+            if (value && (value.includes('oklch') || value.includes('oklab'))) {
+              const convertedColor = convertColor(value)
+              child.style.setProperty(prop, convertedColor, 'important')
+            }
+          })
+        }
+      })
+      
+    } catch (error) {
+      console.warn('Erro ao converter cores:', error)
+      // Aplicar tema seguro como fallback
+      element.style.setProperty('color', '#000000', 'important')
+      element.style.setProperty('backgroundColor', '#ffffff', 'important')
+    }
   }
 
   const generatePDF = async () => {
@@ -102,15 +143,23 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
     }
 
     setIsGeneratingPDF(true)
+    setLoadingStep('Inicializando...')
+    
     try {
       const element = printRef.current
       
-      // Aguardar um momento para garantir que o DOM está estável
-      await new Promise(resolve => setTimeout(resolve, 100))
+      // Aguardar estabilização do DOM
+      await new Promise(resolve => setTimeout(resolve, 200))
       
-      setLoadingStep('Preparando cores...')
-      // Converter cores modernas para RGB compatíveis
-      convertModernColorsToRGB(element)
+      setLoadingStep('Preparando conteúdo...')
+      
+      // Converter cores apenas se necessário
+      try {
+        convertModernColorsToRGB(element)
+      } catch (colorError) {
+        console.warn('Aviso: problema na conversão de cores:', colorError)
+        // Continuar sem parar o processo
+      }
       
       // Configurações otimizadas para mobile e compatibilidade com cores
       const options = {
@@ -446,68 +495,69 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end gap-2 flex-wrap">
-        {/* Botão de Impressão (Desktop) ou PDF (Mobile) */}
-        <Button 
-          onClick={handlePrint} 
-          className="bg-blue-600 hover:bg-blue-700"
-          disabled={isGeneratingPDF}
-        >
-          {isGeneratingPDF ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              {loadingStep || 'Processando...'}
-            </>
-          ) : isMobile() ? (
-            <>
-              <Download className="h-4 w-4 mr-2" />
-              Salvar PDF
-            </>
-          ) : (
-            <>
-              <Printer className="h-4 w-4 mr-2" />
-              Imprimir
-            </>
-          )}
-        </Button>
-
-        {/* Botão adicional para PDF no desktop */}
-        {!isMobile() && (
+    <ErrorBoundary>
+      <div className="space-y-4">
+        <div className="flex justify-end gap-2 flex-wrap">
+          {/* Botão de Impressão (Desktop) ou PDF (Mobile) */}
           <Button 
-            onClick={generatePDF} 
-            variant="outline"
-            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+            onClick={handlePrint} 
+            className="bg-blue-600 hover:bg-blue-700"
             disabled={isGeneratingPDF}
           >
             {isGeneratingPDF ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                 {loadingStep || 'Processando...'}
+              </>
+            ) : isMobile() ? (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Salvar PDF
               </>
             ) : (
               <>
-                <FileText className="h-4 w-4 mr-2" />
-                Salvar PDF
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
               </>
             )}
           </Button>
-        )}
-      </div>
 
-      <div 
-        ref={printRef} 
-        className="print-container bg-white border border-gray-300 p-6"
-        style={{
-          fontFamily: '"Times New Roman", serif',
-          fontSize: '12px',
-          lineHeight: '1.4',
-          color: '#000',
-          width: '100%',
-          maxWidth: '21cm',
-          margin: '0 auto'
-        }}
-      >
+          {/* Botão adicional para PDF no desktop */}
+          {!isMobile() && (
+            <Button 
+              onClick={generatePDF} 
+              variant="outline"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50"
+              disabled={isGeneratingPDF}
+            >
+              {isGeneratingPDF ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                  {loadingStep || 'Processando...'}
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Salvar PDF
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+
+        <div 
+          ref={printRef} 
+          className="print-container bg-white border border-gray-300 p-6"
+          style={{
+            fontFamily: '"Times New Roman", serif',
+            fontSize: '12px',
+            lineHeight: '1.4',
+            color: '#000',
+            width: '100%',
+            maxWidth: '21cm',
+            margin: '0 auto'
+          }}
+        >
         {/* Cabeçalho */}
         <div className="header">
           <h1>SECRETARIA DE EDUCAÇÃO E CULTURA</h1>
@@ -613,6 +663,6 @@ export function OccurrencePrint({ occurrence }: OccurrencePrintProps) {
           </div>
         </div>
       </div>
-    </div>
+    </ErrorBoundary>
   )
 }
